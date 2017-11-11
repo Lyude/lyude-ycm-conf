@@ -34,145 +34,140 @@ import itertools
 import yaml
 from pathlib import Path
 
-SOURCE_EXTENSIONS = ['.cpp', '.cxx', '.cc', '.c', '.m', '.mm']
+class CompilationDatabase(ycm_core.CompilationDatabase):
+    HEADER_EXTS = {'.h', '.hxx', '.hpp', '.hh'}
+    SOURCE_EXTS = ['.cpp', '.cxx', '.cc', '.c', '.m', '.mm']
 
-database = None
-ccdb_path = None
-config_path = None
-config = None
+    def __init__(self, directory, config):
+        super().__init__(directory)
+        self.config = config
 
-def find_files(filename):
-    print("Beginning search for compilation database and config files...")
+    def get_flags_for_file(self, filename):
+        print('Searching for flags for %s' % filename)
 
-    filepath = Path(filename)
-    ccdb_path = None
-    config_path = None
+        # If this is header file, we're not going to have any entry for it in
+        # the compilation database, so try searching for source files with
+        # matching names
+        name, ext = os.path.splitext(filename)
+        if ext in self.HEADER_EXTS:
+            print(('Header detected, trying to guess which file to use for '
+                   'compilation flags'))
+            for ext in self.SOURCE_EXTS:
+                res = self.get_flags_for_file(name + ext)
+                if res:
+                    return res
 
-    for parent in filepath.parents:
-        print("Searching %s..." % parent.as_posix())
-
-        if not ccdb_path:
-            path = parent.joinpath('compile_commands.json')
-            if path.is_file():
-                ccdb_path = path.resolve().parent
-                print("Using %s as compilation database directory" %
-                      ccdb_path.as_posix())
-
-        if ccdb_path:
-            path = parent.joinpath('ycm_extra_conf.yml')
-            if path.is_file():
-                config_path = path.resolve()
-                print("Found config file: %s" % config_path)
-                break
-
-    return (ccdb_path, config_path)
-
-def directory_of_this_script():
-    return os.path.dirname(os.path.abspath(__file__))
-
-def apply_config_to_flags(flags):
-    if config and 'flags' in config:
-        flags = flags.copy()
-        flags_config = config['flags']
-
-        if 'remove' in flags_config:
-            remove_set = set(flags_config['remove'])
-            flags = list(filter(lambda e: e not in remove_set, flags))
-
-        if 'add' in flags_config:
-            flags += flags_config['add']
-
-    return flags
-
-def make_relative_paths_in_flags_absolute(flags, working_directory):
-    if not working_directory:
-        return list(flags)
-    new_flags = []
-    make_next_absolute = False
-    path_flags = ['-isystem', '-I', '-iquote', '--sysroot=']
-    for flag in flags:
-        new_flag = flag
-
-        if make_next_absolute:
-            make_next_absolute = False
-            if not flag.startswith('/'):
-                new_flag = os.path.join(working_directory, flag)
-
-        for path_flag in path_flags:
-            if flag == path_flag:
-                make_next_absolute = True
-                break
-
-            if flag.startswith(path_flag):
-                path = flag[len(path_flag):]
-                new_flag = path_flag + os.path.join(working_directory, path)
-                break
-
-        if new_flag:
-            new_flags.append(new_flag)
-    return new_flags
-
-def is_header_file(filename):
-    extension = os.path.splitext(filename)[1]
-    return extension in ['.h', '.hxx', '.hpp', '.hh']
-
-def get_compilation_info_for_file(database, filename):
-    if is_header_file(filename):
-        basename = os.path.splitext(filename)[0]
-        for extension in SOURCE_EXTENSIONS:
-            replacement_file = basename + extension
-            if os.path.exists(replacement_file):
-                print("Using %s for finding compilation database flags" %
-                      replacement_file)
-                compilation_info = database.GetCompilationInfoForFile(
-                    replacement_file)
-                if compilation_info.compiler_flags_:
-                    return compilation_info
-        return None
-
-    print("Using %s for finding compilation database flags" % filename)
-    compilation_info = database.GetCompilationInfoForFile(filename)
-    if compilation_info.compiler_flags_:
-        return compilation_info
-
-    print("No files found, giving up")
-    return None
-
-def flags_for_file(filename, **kwargs):
-    global database
-    global ccdb_path
-    global config_path
-    global config
-
-    if not database:
-        print("Searching for compilation database...")
-        ccdb_path, config_path = find_files(filename)
-        database = ycm_core.CompilationDatabase(ccdb_path)
-        if not database:
-            print("None found")
+            print('No flags detected for %s' % filename)
             return
 
-        if config_path:
-            config = yaml.load(open(config_path))
+        comp_info = super().GetCompilationInfoForFile(filename)
+        if not comp_info.compiler_flags_:
+            return None
 
-    compilation_info = get_compilation_info_for_file(database, filename)
-    if not compilation_info:
-        print("No compilation info found for %s" % filename)
+        flags = list(comp_info.compiler_flags_)
+        print('Found flags: %s' % flags)
+
+        if self.config and 'flags' in self.config:
+            flags_cfg = self.config['flags']
+            if 'remove' in flags_cfg:
+                remove_set = set(flags_cfg['remove'])
+                flags = list(filter(lambda e: e not in remove_set, flags))
+            if 'add' in flags_cfg:
+                flags += flags_cfg['add']
+
+        flags = CompilationDatabase._make_relative_paths_in_flags_absolute(
+            flags, comp_info.compiler_working_dir_)
+
+        print('Final flags: %s' % flags)
+        return flags
+
+    def _make_relative_paths_in_flags_absolute(flags, working_directory):
+        if not working_directory:
+            return list(flags)
+        new_flags = []
+        make_next_absolute = False
+        path_flags = ['-isystem', '-I', '-iquote', '--sysroot=']
+        for flag in flags:
+            new_flag = flag
+
+            if make_next_absolute:
+                make_next_absolute = False
+                if not flag.startswith('/'):
+                    new_flag = os.path.join(working_directory, flag)
+
+            for path_flag in path_flags:
+                if flag == path_flag:
+                    make_next_absolute = True
+                    break
+
+                if flag.startswith(path_flag):
+                    path = flag[len(path_flag):]
+                    new_flag = path_flag + os.path.join(working_directory, path)
+                    break
+
+            if new_flag:
+                new_flags.append(new_flag)
+        return new_flags
+
+class FileManager():
+    def __init__(self):
+        self._dbs = dict()
+        self._configs = dict()
+
+    def find_db_for_file(self, filename):
+        path = Path(filename).absolute()
+        found = None
+        for parent in list(path.parents):
+            print('Searching %s for compilation databases...' % str(parent))
+            if parent in self._dbs:
+                print('Using database %s for %s' % (str(parent), filename))
+                return self._dbs[parent]
+
+            db_file = parent.joinpath('compile_commands.json')
+            if db_file.is_file():
+                found = parent
+                break
+
+        if not found:
+            print('No database found for %s' % filename)
+            return
+
+        print('Found new compilation database %s/compile_commands.json' % found)
+        self._dbs[found] = CompilationDatabase(
+            str(found), self._find_config_for_db(found))
+        return self._dbs[found]
+
+    def _find_config_for_db(self, db_dir):
+        assert isinstance(db_dir, Path)
+
+        for parent in [db_dir] + list(db_dir.parents):
+            print('Searching %s for config files...' % str(parent))
+
+            if parent in self._configs:
+                print('Using previously loaded config %s' % str(parent))
+                return self._configs[parent]
+
+            config_file = parent.joinpath('ycm_extra_conf.yml')
+            if config_file.is_file():
+                print('Found new configuration file %s' % str(config_file))
+                self._configs[parent] = yaml.load(open(str(config_file)))
+                return self._configs[parent]
+
+file_man = FileManager()
+
+def flags_for_file(filename, **kwargs):
+    database = file_man.find_db_for_file(filename)
+    if not database:
+        print('No database available for %s' % filename)
         return
 
-    final_flags = make_relative_paths_in_flags_absolute(
-        compilation_info.compiler_flags_,
-        compilation_info.compiler_working_dir_)
-    final_flags = apply_config_to_flags(final_flags)
-
-    print("Looked up flags for %s" % filename)
-    print("Flags for this file: %s" %
-          str([f for f in compilation_info.compiler_flags_]))
-    print("Working directory: %s" % compilation_info.compiler_working_dir_)
-    print("Final flags: %s" % final_flags)
+    flags = database.get_flags_for_file(filename)
+    if not flags:
+        print('No compilation info available for %s')
+        return
 
     return {
-        'flags': final_flags,
+        'flags': flags,
         'do_cache': True
     }
 
