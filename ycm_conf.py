@@ -113,7 +113,7 @@ class CompilationDatabase(ycm_core.CompilationDatabase):
                 new_flags.append(new_flag)
         return new_flags
 
-class FileManager():
+class FileManager:
     def __init__(self):
         self._dbs = dict()
         self._configs = dict()
