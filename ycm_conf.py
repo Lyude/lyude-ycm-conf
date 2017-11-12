@@ -159,15 +159,23 @@ class FileManager:
 file_man = FileManager()
 
 def flags_for_file(filename, **kwargs):
-    database = file_man.find_db_for_file(filename)
-    if not database:
-        error('No database available for %s' % filename)
-        return
+    class NoFlagsFound(Exception):
+        pass
 
-    flags = database.get_flags_for_file(filename)
-    if not flags:
-        error('No compilation info available for %s')
-        return
+    try:
+        database = file_man.find_db_for_file(filename)
+        if not database:
+            raise NoFlagsFound('No database available for %s' % filename)
+
+        flags = database.get_flags_for_file(filename)
+        if not flags:
+            raise NoFlagsFound('No compilation info available for %s')
+    except NoFlagsFound as e:
+        error(e.args[0])
+        return {
+            'flags': [],
+            'do_cache': False
+        }
 
     return {
         'flags': flags,
