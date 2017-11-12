@@ -134,7 +134,6 @@ class FileManager():
                 break
 
         if not found:
-            error('No database found for %s' % filename)
             return
 
         info('Found new compilation database %s/compile_commands.json' % found)
