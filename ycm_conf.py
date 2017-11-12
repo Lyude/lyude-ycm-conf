@@ -68,16 +68,16 @@ class CompilationDatabase(ycm_core.CompilationDatabase):
         if not comp_info.compiler_flags_:
             return None
 
-        flags = list(comp_info.compiler_flags_)
-        debug('Found flags: %s' % flags)
+        flags = comp_info.compiler_flags_
+        debug('Found flags: %s' % list(flags))
 
         if self.config and 'flags' in self.config:
             flags_cfg = self.config['flags']
             if 'remove' in flags_cfg:
                 remove_set = set(flags_cfg['remove'])
-                flags = list(filter(lambda e: e not in remove_set, flags))
+                flags = filter(lambda e: e not in remove_set, flags)
             if 'add' in flags_cfg:
-                flags += flags_cfg['add']
+                flags = itertools.chain(flags, flags_cfg['add'])
 
         flags = CompilationDatabase._make_relative_paths_in_flags_absolute(
             flags, comp_info.compiler_working_dir_)
