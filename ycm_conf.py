@@ -64,7 +64,7 @@ class CompilationDatabase(ycm_core.CompilationDatabase):
                     return res
             return
 
-        comp_info = super().GetCompilationInfoForFile(filename)
+        comp_info = self.GetCompilationInfoForFile(filename)
         if not comp_info.compiler_flags_:
             return None
 
