@@ -31,7 +31,6 @@
 import os
 import ycm_core
 import itertools
-import functools
 import yaml
 import logging
 from pathlib import Path
