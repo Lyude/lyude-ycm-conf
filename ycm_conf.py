@@ -121,7 +121,7 @@ class FileManager():
     def find_db_for_file(self, filename):
         path = Path(filename).absolute()
         found = None
-        for parent in list(path.parents):
+        for parent in path.parents:
             debug('Searching %s for compilation databases...' % str(parent))
             if parent in self._dbs:
                 info('Using database %s for %s' % (str(parent), filename))
@@ -143,7 +143,7 @@ class FileManager():
     def _find_config_for_db(self, db_dir):
         assert isinstance(db_dir, Path)
 
-        for parent in [db_dir] + list(db_dir.parents):
+        for parent in itertools.chain([db_dir], db_dir.parents):
             debug('Searching %s for config files...' % str(parent))
 
             if parent in self._configs:
