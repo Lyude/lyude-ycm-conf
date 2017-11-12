@@ -31,8 +31,15 @@
 import os
 import ycm_core
 import itertools
+import functools
 import yaml
+import logging
 from pathlib import Path
+
+log_prefix = 'lyude-ycm-conf: '
+def info(msg, *args, **kwargs): logging.info(log_prefix + msg, *args, **kwargs)
+def error(msg, *args, **kwargs): logging.error(log_prefix + msg, *args, **kwargs)
+def debug(msg, *args, **kwargs): logging.debug(log_prefix + msg, *args, **kwargs)
 
 class CompilationDatabase(ycm_core.CompilationDatabase):
     HEADER_EXTS = {'.h', '.hxx', '.hpp', '.hh'}
@@ -43,21 +50,19 @@ class CompilationDatabase(ycm_core.CompilationDatabase):
         self.config = config
 
     def get_flags_for_file(self, filename):
-        print('Searching for flags for %s' % filename)
+        info('Searching for flags for %s' % filename)
 
         # If this is header file, we're not going to have any entry for it in
         # the compilation database, so try searching for source files with
         # matching names
         name, ext = os.path.splitext(filename)
         if ext in self.HEADER_EXTS:
-            print(('Header detected, trying to guess which file to use for '
+            debug(('Header detected, trying to guess which file to use for '
                    'compilation flags'))
             for ext in self.SOURCE_EXTS:
                 res = self.get_flags_for_file(name + ext)
                 if res:
                     return res
-
-            print('No flags detected for %s' % filename)
             return
 
         comp_info = super().GetCompilationInfoForFile(filename)
@@ -65,7 +70,7 @@ class CompilationDatabase(ycm_core.CompilationDatabase):
             return None
 
         flags = list(comp_info.compiler_flags_)
-        print('Found flags: %s' % flags)
+        debug('Found flags: %s' % flags)
 
         if self.config and 'flags' in self.config:
             flags_cfg = self.config['flags']
@@ -78,7 +83,7 @@ class CompilationDatabase(ycm_core.CompilationDatabase):
         flags = CompilationDatabase._make_relative_paths_in_flags_absolute(
             flags, comp_info.compiler_working_dir_)
 
-        print('Final flags: %s' % flags)
+        debug('Final flags: %s' % flags)
         return flags
 
     def _make_relative_paths_in_flags_absolute(flags, working_directory):
@@ -118,9 +123,9 @@ class FileManager():
         path = Path(filename).absolute()
         found = None
         for parent in list(path.parents):
-            print('Searching %s for compilation databases...' % str(parent))
+            debug('Searching %s for compilation databases...' % str(parent))
             if parent in self._dbs:
-                print('Using database %s for %s' % (str(parent), filename))
+                info('Using database %s for %s' % (str(parent), filename))
                 return self._dbs[parent]
 
             db_file = parent.joinpath('compile_commands.json')
@@ -129,10 +134,10 @@ class FileManager():
                 break
 
         if not found:
-            print('No database found for %s' % filename)
+            error('No database found for %s' % filename)
             return
 
-        print('Found new compilation database %s/compile_commands.json' % found)
+        info('Found new compilation database %s/compile_commands.json' % found)
         self._dbs[found] = CompilationDatabase(
             str(found), self._find_config_for_db(found))
         return self._dbs[found]
@@ -141,15 +146,15 @@ class FileManager():
         assert isinstance(db_dir, Path)
 
         for parent in [db_dir] + list(db_dir.parents):
-            print('Searching %s for config files...' % str(parent))
+            debug('Searching %s for config files...' % str(parent))
 
             if parent in self._configs:
-                print('Using previously loaded config %s' % str(parent))
+                debug('Using previously loaded config %s' % str(parent))
                 return self._configs[parent]
 
             config_file = parent.joinpath('ycm_extra_conf.yml')
             if config_file.is_file():
-                print('Found new configuration file %s' % str(config_file))
+                info('Found new configuration file %s' % str(config_file))
                 self._configs[parent] = yaml.load(open(str(config_file)))
                 return self._configs[parent]
 
@@ -158,12 +163,12 @@ file_man = FileManager()
 def flags_for_file(filename, **kwargs):
     database = file_man.find_db_for_file(filename)
     if not database:
-        print('No database available for %s' % filename)
+        error('No database available for %s' % filename)
         return
 
     flags = database.get_flags_for_file(filename)
     if not flags:
-        print('No compilation info available for %s')
+        error('No compilation info available for %s')
         return
 
     return {
