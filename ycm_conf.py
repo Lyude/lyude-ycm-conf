@@ -120,7 +120,15 @@ class FileManager:
         self._configs = dict()
 
     def find_db_for_file(self, filename):
-        path = Path(filename).absolute()
+        path = Path(filename)
+        # It's possible that this might not actually be a path to a real file,
+        # and might be a URI that's from a vim plugin. So, see if the file
+        # actually exists
+        if not path.exists():
+            debug("'%s' is not a valid file path, ignoring" % filename)
+            return None
+
+        path = path.absolute()
         found = None
         for parent in path.parents:
             debug('Searching %s for compilation databases...' % str(parent))
