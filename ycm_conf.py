@@ -85,12 +85,13 @@ class CompilationDatabase(ycm_core.CompilationDatabase):
         debug('Final flags: %s' % flags)
         return flags
 
-    def _make_relative_paths_in_flags_absolute(flags, working_directory):
+    PATH_FLAGS = {'-isystem', '-I', '-iquote', '--sysroot='}
+    @classmethod
+    def _make_relative_paths_in_flags_absolute(cls, flags, working_directory):
         if not working_directory:
             return list(flags)
         new_flags = []
         make_next_absolute = False
-        path_flags = ['-isystem', '-I', '-iquote', '--sysroot=']
         for flag in flags:
             new_flag = flag
 
@@ -99,7 +100,7 @@ class CompilationDatabase(ycm_core.CompilationDatabase):
                 if not flag.startswith('/'):
                     new_flag = os.path.join(working_directory, flag)
 
-            for path_flag in path_flags:
+            for path_flag in cls.PATH_FLAGS:
                 if flag == path_flag:
                     make_next_absolute = True
                     break
