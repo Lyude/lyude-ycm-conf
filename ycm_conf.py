@@ -178,7 +178,8 @@ def flags_for_file(filename, **kwargs):
 
         flags = database.get_flags_for_file(filename)
         if not flags:
-            raise NoFlagsFound('No compilation info available for %s')
+            raise NoFlagsFound('No compilation info available for %s' %
+                               filename)
     except NoFlagsFound as e:
         error(e.args[0])
         return {
