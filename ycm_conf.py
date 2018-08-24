@@ -166,11 +166,10 @@ class FileManager:
                 return self._configs[parent]
 
 file_man = FileManager()
+class NoFlagsFound(Exception):
+    pass
 
 def flags_for_file(filename, **kwargs):
-    class NoFlagsFound(Exception):
-        pass
-
     try:
         database = file_man.find_db_for_file(filename)
         if not database:
