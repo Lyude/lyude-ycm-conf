@@ -169,7 +169,8 @@ file_man = FileManager()
 class NoFlagsFound(Exception):
     pass
 
-def flags_for_file(filename, **kwargs):
+def c_settings(**kwargs):
+    filename = kwargs['filename']
     try:
         database = file_man.find_db_for_file(filename)
         if not database:
@@ -181,15 +182,17 @@ def flags_for_file(filename, **kwargs):
                                filename)
     except NoFlagsFound as e:
         error(e.args[0])
-        return {
-            'flags': [],
-            'do_cache': False
-        }
+        return { 'flags': [] }
 
     return {
         'flags': flags,
         'do_cache': True
     }
 
-FlagsForFile = flags_for_file
+def Settings(**kwargs):
+    language = kwargs['language']
+    if language == 'cfamily':
+        return c_settings(**kwargs)
+
+    return {}
 # vim: tabstop=4 softtabstop=4 shiftwidth=4 expandtab
