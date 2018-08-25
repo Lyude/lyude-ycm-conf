@@ -48,6 +48,18 @@ class CompilationDatabase(ycm_core.CompilationDatabase):
         super().__init__(directory)
         self.config = config
 
+        if 'extensions' in config:
+            ext_cfg = config['extensions']
+            if 'header' in ext_cfg:
+                self.header_exts = frozenset(ext_cfg['header'])
+            if 'source' in ext_cfg:
+                self.source_exts = frozenset(ext_cfg['source'])
+
+        if not hasattr(self, 'header_exts'):
+            self.header_exts = self.HEADER_EXTS
+        if not hasattr(self, 'source_exts'):
+            self.source_exts = self.SOURCE_EXTS
+
     def get_flags_for_file(self, filename):
         info('Searching for flags for %s' % filename)
 
@@ -55,10 +67,10 @@ class CompilationDatabase(ycm_core.CompilationDatabase):
         # the compilation database, so try searching for source files with
         # matching names
         name, ext = os.path.splitext(filename)
-        if ext in self.HEADER_EXTS:
+        if ext in self.header_exts:
             debug(('Header detected, trying to guess which file to use for '
                    'compilation flags'))
-            for ext in self.SOURCE_EXTS:
+            for ext in self.source_exts:
                 res = self.get_flags_for_file(name + ext)
                 if res:
                     return res
