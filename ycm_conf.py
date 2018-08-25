@@ -42,7 +42,7 @@ def debug(msg, *args, **kwargs): logging.debug(log_prefix + msg, *args, **kwargs
 
 class CompilationDatabase(ycm_core.CompilationDatabase):
     HEADER_EXTS = {'.h', '.hxx', '.hpp', '.hh'}
-    SOURCE_EXTS = ['.cpp', '.cxx', '.cc', '.c', '.m', '.mm']
+    SOURCE_EXTS = {'.cpp', '.cxx', '.cc', '.c', '.m', '.mm'}
 
     def __init__(self, directory, config):
         super().__init__(directory)
