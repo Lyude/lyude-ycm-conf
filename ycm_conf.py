@@ -40,6 +40,8 @@ def info(msg, *args, **kwargs): logging.info(log_prefix + msg, *args, **kwargs)
 def error(msg, *args, **kwargs): logging.error(log_prefix + msg, *args, **kwargs)
 def debug(msg, *args, **kwargs): logging.debug(log_prefix + msg, *args, **kwargs)
 
+info('Loaded')
+
 class CompilationDatabase(ycm_core.CompilationDatabase):
     HEADER_EXTS = {'.h', '.hxx', '.hpp', '.hh'}
     SOURCE_EXTS = {'.cpp', '.cxx', '.cc', '.c', '.m', '.mm'}
