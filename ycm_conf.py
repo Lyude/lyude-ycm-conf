@@ -174,7 +174,8 @@ class FileManager:
             config_file = parent.joinpath('ycm_extra_conf.yml')
             if config_file.is_file():
                 info('Found new configuration file %s' % str(config_file))
-                self._configs[parent] = yaml.load(open(str(config_file)))
+                with open(str(config_file)) as config:
+                    self._configs[parent] = yaml.load(config)
                 return self._configs[parent]
 
 file_man = FileManager()
