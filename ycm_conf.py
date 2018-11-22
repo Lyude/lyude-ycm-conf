@@ -33,6 +33,7 @@ import ycm_core
 import itertools
 import yaml
 import logging
+import re
 from pathlib import Path
 
 log_prefix = 'lyude-ycm-conf: '
@@ -45,6 +46,61 @@ info('Loaded')
 class CompilationDatabase(ycm_core.CompilationDatabase):
     HEADER_EXTS = {'.h', '.hxx', '.hpp', '.hh'}
     SOURCE_EXTS = {'.cpp', '.cxx', '.cc', '.c', '.m', '.mm'}
+
+    """
+    A list of compiler flags which can/must span multiple arguments
+    """
+    MULTI_ARG_FLAGS = {
+        '-include',
+        '-imacros',
+        '-iprefix',
+        '-iquote',
+        '-isysroot',
+        '-isystem',
+        '-iwithprefix',
+        '-iwithprefixbefore',
+        '-idirafter',
+        '-imultilib',
+        '--param',
+        '-T',
+        '-u',
+        '-Xlinker',
+        '-Xpreprocesor',
+        '-x',
+        '-z',
+    }
+
+    """
+    A list of compiler flags which take a pathname as their argument
+    """
+    PATH_FLAGS = {
+        '-include',
+        '-imacros',
+        '-iprefix',
+        '-iquote',
+        '-isysroot',
+        '-isystem',
+        '-iwithprefix',
+        '-iwithprefixbefore',
+        '-idirafter',
+        '-imultilib',
+        '-iplugindir=',
+        '-I',
+        '-L',
+        '--sysroot='
+    }
+
+    """
+    A list of compiler flags that should be 'squashed' into a single string
+    before being handed off as results
+    """
+    SQUASH_FLAGS = { '-I', '-L', '--sysroot=' }
+
+    """
+    Matches a path flag which has been specified in it's single-argument form
+    (e.g. -Ifoo would be single-argument form, ['-I', 'foo'] would be multi
+    """
+    SINGLE_ARG_PATH_FLAG = re.compile(r'^(?P<flag>-([IL]|(-sysroot|iplugindir)=))(?P<path>.+)$')
 
     def __init__(self, directory, config):
         super().__init__(directory)
@@ -61,6 +117,61 @@ class CompilationDatabase(ycm_core.CompilationDatabase):
             self.header_exts = self.HEADER_EXTS
         if not hasattr(self, 'source_exts'):
             self.source_exts = self.SOURCE_EXTS
+
+    class MultiFlagError(Exception):
+        pass
+
+    @classmethod
+    def _parse_multi_arg_flags(cls, flags):
+        flags = iter(flags)
+        for flag in flags:
+            match = cls.SINGLE_ARG_PATH_FLAG.match(flag)
+            if match:
+                flag = (match['flag'], match['path'])
+            elif flag in cls.MULTI_ARG_FLAGS:
+                try:
+                    flag = (flag, next(flags))
+                except StopIteration as e:
+                    raise CompilationDatabase.MultiFlagError(flags) from e
+
+            yield flag
+
+    @classmethod
+    def _make_relative_paths_in_flags_absolute(cls, flags, wd):
+        """
+        Goes through a list of parsed flags, and makes any relative
+        paths into absolute paths
+        """
+        wd = Path(wd)
+        for f in flags:
+            if not isinstance(f, tuple):
+                yield f
+                continue
+
+            flag, value = f
+            if flag not in cls.PATH_FLAGS:
+                yield f
+                continue
+
+            value = Path(value)
+            if value.is_absolute():
+                yield f
+                continue
+
+            value = (wd / value).absolute()
+            yield (flag, str(value))
+
+    @classmethod
+    def _flatten_flags(cls, flags):
+        for flag in flags:
+            if isinstance(flag, tuple):
+                if flag[0] in cls.SQUASH_FLAGS:
+                    yield ''.join(flag)
+                else:
+                    for i in flag:
+                        yield i
+            else:
+                yield flag
 
     def get_flags_for_file(self, filename):
         info('Searching for flags for %s' % filename)
@@ -81,9 +192,10 @@ class CompilationDatabase(ycm_core.CompilationDatabase):
         comp_info = self.GetCompilationInfoForFile(filename)
         if not comp_info.compiler_flags_:
             return None
+        flags = list(comp_info.compiler_flags_)
 
-        flags = comp_info.compiler_flags_
-        debug('Found flags: %s' % list(flags))
+        debug('Found flags: %s' % flags)
+        flags = self._parse_multi_arg_flags(flags)
 
         if self.config and 'flags' in self.config:
             flags_cfg = self.config['flags']
@@ -93,40 +205,13 @@ class CompilationDatabase(ycm_core.CompilationDatabase):
             if 'add' in flags_cfg:
                 flags = itertools.chain(flags, flags_cfg['add'])
 
-        flags = CompilationDatabase._make_relative_paths_in_flags_absolute(
-            flags, comp_info.compiler_working_dir_)
+        if comp_info.compiler_working_dir_:
+            flags = self._make_relative_paths_in_flags_absolute(
+                flags, comp_info.compiler_working_dir_)
 
+        flags = list(self._flatten_flags(flags))
         debug('Final flags: %s' % flags)
         return flags
-
-    PATH_FLAGS = {'-isystem', '-I', '-iquote', '--sysroot='}
-    @classmethod
-    def _make_relative_paths_in_flags_absolute(cls, flags, working_directory):
-        if not working_directory:
-            return list(flags)
-        new_flags = []
-        make_next_absolute = False
-        for flag in flags:
-            new_flag = flag
-
-            if make_next_absolute:
-                make_next_absolute = False
-                if not flag.startswith('/'):
-                    new_flag = os.path.join(working_directory, flag)
-
-            for path_flag in cls.PATH_FLAGS:
-                if flag == path_flag:
-                    make_next_absolute = True
-                    break
-
-                if flag.startswith(path_flag):
-                    path = flag[len(path_flag):]
-                    new_flag = path_flag + os.path.join(working_directory, path)
-                    break
-
-            if new_flag:
-                new_flags.append(new_flag)
-        return new_flags
 
 class FileManager:
     def __init__(self):
@@ -176,8 +261,26 @@ class FileManager:
             config_file = parent.joinpath('ycm_extra_conf.yml')
             if config_file.is_file():
                 info('Found new configuration file %s' % str(config_file))
-                with open(str(config_file)) as config:
-                    self._configs[parent] = yaml.load(config)
+                with open(str(config_file)) as config_file:
+                    config = yaml.load(config_file)
+
+                # Convert any flag lists in the config to tuples, since that's
+                # all we use in parsed flag lists
+                if 'flags' in config:
+                    config_flags = config['flags']
+                    convert_targets = []
+
+                    if 'add' in config_flags:
+                        convert_targets.append(config_flags['add'])
+                    if 'remove' in config_flags:
+                        convert_targets.append(config_flags['remove'])
+
+                    for target in convert_targets:
+                        for i, flag in enumerate(target):
+                            if isinstance(flag, list):
+                                target[i] = tuple(flag)
+
+                self._configs[parent] = config
                 return self._configs[parent]
 
 file_man = FileManager()
