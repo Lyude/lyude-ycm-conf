@@ -153,12 +153,7 @@ class CompilationDatabase(ycm_core.CompilationDatabase):
                 yield f
                 continue
 
-            value = Path(value)
-            if value.is_absolute():
-                yield f
-                continue
-
-            value = (wd / value).absolute()
+            value = (wd / Path(value)).resolve()
             yield (flag, str(value))
 
     @classmethod
