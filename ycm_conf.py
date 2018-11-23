@@ -62,6 +62,7 @@ class CompilationDatabase(ycm_core.CompilationDatabase):
         '-idirafter',
         '-imultilib',
         '--param',
+        '-o',
         '-T',
         '-u',
         '-Xlinker',
@@ -102,6 +103,12 @@ class CompilationDatabase(ycm_core.CompilationDatabase):
     """
     SINGLE_ARG_PATH_FLAG = re.compile(r'^(?P<flag>-([IL]|(-sysroot|iplugindir)=))(?P<path>.+)$')
 
+    """
+    A list of flags that don't do anything in the context of YouCompleteMe
+    and thus, can be removed.
+    """
+    USELESS_FLAGS = { '-o' }
+
     def __init__(self, directory, config):
         super().__init__(directory)
         self.config = config
@@ -135,6 +142,21 @@ class CompilationDatabase(ycm_core.CompilationDatabase):
                     raise CompilationDatabase.MultiFlagError(flags) from e
 
             yield flag
+
+    @classmethod
+    def _skip_useless_args(cls, flags):
+        """
+        Drop flags from the processing pipeline that aren't ever going to be
+        useful to us
+        """
+        for f in flags:
+            if isinstance(f, tuple):
+                flag = f[0]
+            else:
+                flag = f
+
+            if not flag in cls.USELESS_FLAGS:
+                yield f
 
     @classmethod
     def _make_relative_paths_in_flags_absolute(cls, flags, wd):
@@ -191,6 +213,7 @@ class CompilationDatabase(ycm_core.CompilationDatabase):
 
         debug('Found flags: %s' % flags)
         flags = self._parse_multi_arg_flags(flags)
+        flags = self._skip_useless_args(flags)
 
         if self.config and 'flags' in self.config:
             flags_cfg = self.config['flags']
