@@ -229,6 +229,25 @@ class CompilationDatabase(ycm_core.CompilationDatabase):
 
         flags = list(self._flatten_flags(flags))
         debug('Final flags: %s' % flags)
+
+        if logging.root.isEnabledFor(logging.DEBUG):
+            # If the flags start with the binary used to compile this, remove
+            # it
+            dbg_flags = flags
+            if not dbg_flags[0].startswith('-'):
+                dbg_flags = dbg_flags[1:]
+
+            # All flags will need to be single quoted to work properly in a
+            # shell
+            dbg_flags = ["'{0}'".format(f) for f in dbg_flags]
+
+            dbg_flags = ' '.join(dbg_flags)
+            if comp_info.compiler_working_dir_:
+                debug('Clang command: pushd {wd}; clang {cmd}; popd'.format(
+                    wd=comp_info.compiler_working_dir_, cmd=dbg_flags))
+            else:
+                debug('Clang command: clang {cmd}'.format(cmd=dbg_flags))
+
         return flags
 
 class FileManager:
