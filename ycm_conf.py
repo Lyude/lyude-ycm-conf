@@ -111,8 +111,12 @@ class CompilationDatabase(ycm_core.CompilationDatabase):
 
     def __init__(self, directory, config):
         super().__init__(directory)
-        self.config = config
+        self.add_flags = []
+        self.remove_flags = []
+        self.header_exts = self.HEADER_EXTS
+        self.source_exts = self.SOURCE_EXTS
 
+        # Parse file extensions
         if 'extensions' in config:
             ext_cfg = config['extensions']
             if 'header' in ext_cfg:
@@ -120,10 +124,22 @@ class CompilationDatabase(ycm_core.CompilationDatabase):
             if 'source' in ext_cfg:
                 self.source_exts = frozenset(ext_cfg['source'])
 
-        if not hasattr(self, 'header_exts'):
-            self.header_exts = self.HEADER_EXTS
-        if not hasattr(self, 'source_exts'):
-            self.source_exts = self.SOURCE_EXTS
+        # Parse flag settings
+        if 'flags' in config:
+            flags_cfg = config['flags']
+
+            if 'add' in flags_cfg:
+                self.add_flags = flags_cfg['add']
+            if 'remove' in flags_cfg:
+                self.remove_flags = flags_cfg['remove']
+
+        for flag_list in (self.add_flags, self.remove_flags):
+            for i, flag in enumerate(flag_list):
+                if isinstance(flag, list):
+                    flag_list[i] = tuple(flag)
+
+        self.remove_flags = frozenset(self.remove_flags)
+
 
     class MultiFlagError(Exception):
         pass
@@ -214,15 +230,10 @@ class CompilationDatabase(ycm_core.CompilationDatabase):
         debug('Found flags: %s' % flags)
         flags = self._parse_multi_arg_flags(flags)
         flags = self._skip_useless_args(flags)
-
-        if self.config and 'flags' in self.config:
-            flags_cfg = self.config['flags']
-            if 'remove' in flags_cfg:
-                remove_set = set(flags_cfg['remove'])
-                flags = filter(lambda e: e not in remove_set, flags)
-            if 'add' in flags_cfg:
-                flags = itertools.chain(flags, flags_cfg['add'])
-
+        if self.remove_flags:
+            flags = filter(lambda e: e not in self.remove_flags, flags)
+        if self.add_flags:
+            flags = itertools.chain(flags, self.add_flags)
         if comp_info.compiler_working_dir_:
             flags = self._make_relative_paths_in_flags_absolute(
                 flags, comp_info.compiler_working_dir_)
@@ -300,22 +311,6 @@ class FileManager:
                 info('Found new configuration file %s' % str(config_file))
                 with open(str(config_file)) as config_file:
                     config = yaml.load(config_file)
-
-                # Convert any flag lists in the config to tuples, since that's
-                # all we use in parsed flag lists
-                if 'flags' in config:
-                    config_flags = config['flags']
-                    convert_targets = []
-
-                    if 'add' in config_flags:
-                        convert_targets.append(config_flags['add'])
-                    if 'remove' in config_flags:
-                        convert_targets.append(config_flags['remove'])
-
-                    for target in convert_targets:
-                        for i, flag in enumerate(target):
-                            if isinstance(flag, list):
-                                target[i] = tuple(flag)
 
                 self._configs[parent] = config
                 return self._configs[parent]
